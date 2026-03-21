@@ -13,9 +13,10 @@ import {
     Minus, Plus, X, Package,
     Banknote, CreditCard, Smartphone, CheckCircle2
 } from 'lucide-react';
+import PropTypes from 'prop-types';
 import { useToast } from '../context/ToastContext';
 
-const { ipcRenderer } = window.require('electron');
+const { ipcRenderer } = globalThis.require('electron');
 
 // ── Payment method config ─────────────────────────────────────────────────────
 const PAYMENT_METHODS = [
@@ -34,15 +35,20 @@ const PaymentModal = ({ isOpen, onClose, finalTotal, onConfirm }) => {
         if (isOpen) { setMethod('cash'); setPaid(''); setCustomer({ name: '', phone: '', address: '' }); }
     }, [isOpen]);
 
-    const paidNum = parseFloat(paid) || 0;
+    const paidNum = Number.parseFloat(paid) || 0;
     // UPI/Card with empty input → treat as full payment
     const effectivePaid = paid === '' && method !== 'cash' ? finalTotal : paidNum;
     const change = method === 'cash' ? Math.max(0, effectivePaid - finalTotal) : 0;
     const pendingAmount = paid !== '' && effectivePaid < finalTotal ? finalTotal - effectivePaid : 0;
     const isCreditSale = pendingAmount > 0;
-    const isValid = isCreditSale
-        ? customer.name.trim() !== ''
-        : method === 'cash' ? effectivePaid >= finalTotal : true;
+    let isValid;
+    if (isCreditSale) {
+        isValid = customer.name.trim() !== '';
+    } else if (method === 'cash') {
+        isValid = effectivePaid >= finalTotal;
+    } else {
+        isValid = true;
+    }
 
     const handleMethodChange = (m) => {
         setMethod(m);
@@ -64,7 +70,8 @@ const PaymentModal = ({ isOpen, onClose, finalTotal, onConfirm }) => {
     };
 
     const exactAmt = String(finalTotal.toFixed(2));
-    const inputLabel = method === 'cash' ? 'Cash Tendered (₹)' : method === 'upi' ? 'Amount Received — UPI (₹)' : 'Amount Received — Card (₹)';
+    const inputLabels = { cash: 'Cash Tendered (₹)', upi: 'Amount Received — UPI (₹)', card: 'Amount Received — Card (₹)' };
+    const inputLabel = inputLabels[method];
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Payment" size="sm">
@@ -98,7 +105,7 @@ const PaymentModal = ({ isOpen, onClose, finalTotal, onConfirm }) => {
                         <div className="relative">
                             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-bold text-slate-400 pointer-events-none">₹</span>
                             <Input type="number" placeholder={finalTotal.toFixed(2)} value={paid}
-                                onChange={e => { const v = e.target.value; if (v === '' || parseFloat(v) >= 0) setPaid(v); }}
+                                onChange={e => { const v = e.target.value; if (v === '' || Number.parseFloat(v) >= 0) setPaid(v); }}
                                 className="text-xl font-bold text-center pl-8 h-14" autoFocus min={0} />
                         </div>
                     </div>
@@ -180,6 +187,13 @@ const PaymentModal = ({ isOpen, onClose, finalTotal, onConfirm }) => {
     );
 };
 
+PaymentModal.propTypes = {
+    isOpen: PropTypes.bool.isRequired,
+    onClose: PropTypes.func.isRequired,
+    finalTotal: PropTypes.number.isRequired,
+    onConfirm: PropTypes.func.isRequired,
+};
+
 // ── Main POS Component ────────────────────────────────────────────────────────
 const POS = () => {
     const {
@@ -257,8 +271,8 @@ const POS = () => {
             ...activeProduct,
             id: cartId,
             name: `${activeProduct.name} (${variantName})`,
-            price: parseFloat(variantData.price) || 0,
-            gstRate: parseFloat(variantData.gstRate) || 0,
+            price: Number.parseFloat(variantData.price) || 0,
+            gstRate: Number.parseFloat(variantData.gstRate) || 0,
             originalId: activeProduct.id,
             variantName,
             maxStock: variantData.quantity
@@ -270,13 +284,18 @@ const POS = () => {
         const { variantName, variantData } = rechargeModal;
         const { number, amount } = rechargeInputs;
         if (!number || !amount) return;
-        const safeGst = variantData?.gstRate !== undefined ? parseFloat(variantData.gstRate) : (activeProduct?.gstRate ? parseFloat(activeProduct.gstRate) : 0);
+        let safeGst = 0;
+        if (variantData?.gstRate !== undefined) {
+            safeGst = Number.parseFloat(variantData.gstRate);
+        } else if (activeProduct?.gstRate) {
+            safeGst = Number.parseFloat(activeProduct.gstRate);
+        }
         addToCart({
             ...activeProduct,
             id: `${activeProduct.id}-${variantName}-${Date.now()}`,
             name: `${activeProduct.name} (${variantName}) - ${number}`,
-            price: parseFloat(amount) || 0,
-            gstRate: isNaN(safeGst) ? 0 : safeGst,
+            price: Number.parseFloat(amount) || 0,
+            gstRate: Number.isNaN(safeGst) ? 0 : safeGst,
             quantity: 1,
             originalId: activeProduct.id,
             variantName,
@@ -297,8 +316,8 @@ const POS = () => {
         });
         const grossTotal = subtotal + totalGst;
         const discountAmount = discountType === 'percent'
-            ? (grossTotal * (parseFloat(discountValue) || 0)) / 100
-            : parseFloat(discountValue) || 0;
+            ? (grossTotal * (Number.parseFloat(discountValue) || 0)) / 100
+            : Number.parseFloat(discountValue) || 0;
         return { subtotal, totalGst, grossTotal, discountAmount, finalTotal: Math.max(0, grossTotal - discountAmount) };
     };
 
@@ -370,11 +389,12 @@ const POS = () => {
                                 const isOutOfStock = !product.isVariablePrice && !hasVariants && product.stock <= 0;
                                 const previewVariants = variantEntries.slice(0, 3);
                                 return (
-                                    <div
+                                    <button
                                         key={product.id}
+                                        type="button"
                                         onClick={() => !isOutOfStock && handleProductClick(product)}
                                         className={cn(
-                                            "bg-white border rounded-xl p-3 flex flex-col gap-2",
+                                            "bg-white border rounded-xl p-3 flex flex-col gap-2 w-full text-left",
                                             "transition-all duration-150 relative overflow-hidden",
                                             isOutOfStock
                                                 ? "opacity-50 cursor-not-allowed border-slate-100"
@@ -438,7 +458,7 @@ const POS = () => {
                                                 </span>
                                             </div>
                                         )}
-                                    </div>
+                                    </button>
                                 );
                             })}
                         </div>
@@ -446,13 +466,15 @@ const POS = () => {
 
                     {/* Variant overlay */}
                     {activeProduct && (
-                        <div
-                            className="absolute inset-0 z-20 flex items-center justify-center p-4 bg-slate-900/20 backdrop-blur-[2px] rounded-xl"
-                            onClick={() => setActiveProduct(null)}
-                        >
+                        <div className="absolute inset-0 z-20 flex items-center justify-center p-4 rounded-xl">
+                            <button
+                                type="button"
+                                aria-label="Close variant picker"
+                                className="absolute inset-0 bg-slate-900/20 backdrop-blur-[2px] rounded-xl"
+                                onClick={() => setActiveProduct(null)}
+                            />
                             <div
-                                className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85%] animate-in fade-in zoom-in-95 duration-200"
-                                onClick={e => e.stopPropagation()}
+                                className="relative bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85%] animate-in fade-in zoom-in-95 duration-200"
                             >
                                 <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
                                     <div>
@@ -469,18 +491,18 @@ const POS = () => {
                                             const cartId = `${activeProduct.id}-${vName}`;
                                             const inCart = cart.find(i => i.id === cartId)?.quantity || 0;
                                             const oos = vData.quantity <= 0;
+                                            let variantCardClass = "border-slate-100 opacity-50 cursor-not-allowed";
+                                            if (!oos) {
+                                                variantCardClass = inCart > 0
+                                                    ? "cursor-pointer border-indigo-400 bg-indigo-50/40 shadow-md shadow-indigo-500/10"
+                                                    : "cursor-pointer border-slate-200 hover:border-indigo-400 hover:shadow-lg hover:shadow-indigo-500/10 hover:bg-indigo-50/30";
+                                            }
                                             return (
-                                                <div
+                                                <button
                                                     key={vName}
+                                                    type="button"
                                                     onClick={() => handleVariantSelect(vName, vData)}
-                                                    className={cn(
-                                                        "group bg-white border-2 p-3 rounded-xl transition-all duration-150 active:scale-[0.97]",
-                                                        oos
-                                                            ? "border-slate-100 opacity-50 cursor-not-allowed"
-                                                            : inCart > 0
-                                                                ? "cursor-pointer border-indigo-400 bg-indigo-50/40 shadow-md shadow-indigo-500/10"
-                                                                : "cursor-pointer border-slate-200 hover:border-indigo-400 hover:shadow-lg hover:shadow-indigo-500/10 hover:bg-indigo-50/30"
-                                                    )}
+                                                    className={cn("group bg-white border-2 p-3 rounded-xl transition-all duration-150 active:scale-[0.97] text-left w-full", variantCardClass)}
                                                 >
                                                     <div className="flex justify-between items-start mb-2.5">
                                                         <div
@@ -506,7 +528,7 @@ const POS = () => {
                                                         <span className="text-[10px] text-slate-400">GST {vData.gstRate ?? activeProduct.gstRate}%</span>
                                                         <span className="font-bold text-sm text-indigo-600">₹{vData.price || activeProduct.price}</span>
                                                     </div>
-                                                </div>
+                                                </button>
                                             );
                                         })}
                                     </div>
@@ -556,7 +578,7 @@ const POS = () => {
             {/* Mobile cart sheet */}
             {cartOpen && (
                 <div className="fixed inset-0 z-50 md:hidden print:hidden">
-                    <div className="absolute inset-0 bg-black/50" onClick={() => setCartOpen(false)} />
+                    <button type="button" aria-label="Close cart" className="absolute inset-0 bg-black/50" onClick={() => setCartOpen(false)} />
                     <div className="absolute inset-y-0 right-0 w-full max-w-sm bg-white shadow-2xl flex flex-col animate-in slide-in-from-right-full duration-300">
                         <div className="flex items-center justify-between p-4 border-b border-slate-100">
                             <h2 className="font-semibold text-slate-900 flex items-center gap-2">
@@ -598,8 +620,9 @@ const POS = () => {
             >
                 <ModalBody className="space-y-3">
                     <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block">Mobile / DTH Number</label>
+                        <label htmlFor="recharge-number" className="text-xs font-semibold text-slate-500 uppercase tracking-wide block">Mobile / DTH Number</label>
                         <Input
+                            id="recharge-number"
                             placeholder="e.g. 9876543210"
                             value={rechargeInputs.number}
                             onChange={e => setRechargeInputs(p => ({ ...p, number: e.target.value }))}
@@ -607,8 +630,9 @@ const POS = () => {
                         />
                     </div>
                     <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block">Amount (₹)</label>
+                        <label htmlFor="recharge-amount" className="text-xs font-semibold text-slate-500 uppercase tracking-wide block">Amount (₹)</label>
                         <Input
+                            id="recharge-amount"
                             type="number"
                             placeholder="0.00"
                             value={rechargeInputs.amount}
@@ -648,7 +672,7 @@ const CartQtyInput = ({ value, maxStock, onCommit, toast }) => {
     useEffect(() => { setDraft(String(value)); }, [value]);
 
     const commit = () => {
-        const n = parseInt(draft);
+        const n = Number.parseInt(draft, 10);
         if (!n || n < 1) { setDraft(String(value)); return; }
         if (maxStock !== undefined && n > maxStock) {
             toast({ title: 'Stock limit', description: `Max ${maxStock} units.`, type: 'error' });
@@ -670,6 +694,13 @@ const CartQtyInput = ({ value, maxStock, onCommit, toast }) => {
             className="text-xs font-bold w-10 text-center text-slate-800 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:border-indigo-400 focus:bg-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none py-0.5"
         />
     );
+};
+
+CartQtyInput.propTypes = {
+    value: PropTypes.number.isRequired,
+    maxStock: PropTypes.number,
+    onCommit: PropTypes.func.isRequired,
+    toast: PropTypes.func.isRequired,
 };
 
 // ── Cart Panel ────────────────────────────────────────────────────────────────
@@ -709,7 +740,7 @@ const CartPanel = ({
                                             type="number"
                                             className="w-20 h-6 text-xs border border-slate-200 rounded-lg px-2 focus:ring-1 focus:ring-indigo-500 outline-none hover:border-indigo-300 transition-colors"
                                             value={item.price}
-                                            onChange={e => { const v = parseFloat(e.target.value); onUpdatePrice(item.id, v >= 0 ? e.target.value : '0'); }}
+                                            onChange={e => { const v = Number.parseFloat(e.target.value); onUpdatePrice(item.id, v >= 0 ? e.target.value : '0'); }}
                                             placeholder="0"
                                             min="0"
                                             autoFocus
@@ -818,6 +849,24 @@ const CartPanel = ({
     </>
 );
 
+CartPanel.propTypes = {
+    cart: PropTypes.array.isRequired,
+    discountType: PropTypes.string.isRequired,
+    discountValue: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    subtotal: PropTypes.number.isRequired,
+    totalGst: PropTypes.number.isRequired,
+    discountAmount: PropTypes.number.isRequired,
+    finalTotal: PropTypes.number.isRequired,
+    onDiscountTypeChange: PropTypes.func.isRequired,
+    onDiscountValueChange: PropTypes.func.isRequired,
+    onUpdateQty: PropTypes.func.isRequired,
+    onUpdatePrice: PropTypes.func.isRequired,
+    onRemove: PropTypes.func.isRequired,
+    onClear: PropTypes.func.isRequired,
+    onCheckout: PropTypes.func.isRequired,
+    toast: PropTypes.func.isRequired,
+};
+
 // ── A4 Invoice (print-only) ───────────────────────────────────────────────────
 export const ThermalReceipt = ({ data, settings }) => {
     const payLabel = { cash: 'Cash', upi: 'UPI', card: 'Card' }[data.paymentMethod] || 'Cash';
@@ -825,7 +874,7 @@ export const ThermalReceipt = ({ data, settings }) => {
     // Per-item tax breakdown
     const itemRows = data.items.map(item => {
         const taxableAmt = item.price * item.quantity;
-        const gstRate = parseFloat(item.gstRate) || 0;
+        const gstRate = Number.parseFloat(item.gstRate) || 0;
         const cgstRate = gstRate / 2;
         const sgstRate = gstRate / 2;
         const cgstAmt = taxableAmt * cgstRate / 100;
@@ -880,7 +929,7 @@ export const ThermalReceipt = ({ data, settings }) => {
                             <p style={S.storeSub}>
                                 {settings.phone && `Tel: ${settings.phone}`}
                                 {settings.phone && settings.email && '  |  '}
-                                {settings.email && settings.email}
+                                {settings.email}
                             </p>
                         )}
                         {settings.gstin && <p style={{ ...S.storeSub, fontWeight: '600', marginTop: '4px' }}>GSTIN: {settings.gstin}</p>}
@@ -909,7 +958,7 @@ export const ThermalReceipt = ({ data, settings }) => {
                 </thead>
                 <tbody>
                     {itemRows.map((item, i) => (
-                        <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                        <tr key={`${item.id}-${i}`} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
                             <td style={S.tdCenter}>{i + 1}</td>
                             <td style={S.td}>
                                 <div style={{ fontWeight: '600' }}>{item.baseName}</div>
@@ -993,6 +1042,33 @@ export const ThermalReceipt = ({ data, settings }) => {
             </div>
         </div>
     );
+};
+
+ThermalReceipt.propTypes = {
+    data: PropTypes.shape({
+        id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+        date: PropTypes.string,
+        time: PropTypes.string,
+        items: PropTypes.array.isRequired,
+        totals: PropTypes.shape({
+            subtotal: PropTypes.number,
+            totalGst: PropTypes.number,
+            discountAmount: PropTypes.number,
+            finalTotal: PropTypes.number,
+        }).isRequired,
+        paymentMethod: PropTypes.string,
+        tenderedAmount: PropTypes.number,
+        changeGiven: PropTypes.number,
+    }).isRequired,
+    settings: PropTypes.shape({
+        storeName: PropTypes.string,
+        address: PropTypes.string,
+        phone: PropTypes.string,
+        email: PropTypes.string,
+        gstin: PropTypes.string,
+        logo: PropTypes.string,
+        footerMessage: PropTypes.string,
+    }).isRequired,
 };
 
 export default POS;

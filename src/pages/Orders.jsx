@@ -7,10 +7,11 @@ import { Button } from '../components/ui/Button';
 import { Modal, ModalBody, ModalFooter } from '../components/ui/Modal';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Receipt, Calendar, Search, FileText, TrendingUp, XCircle, Banknote, CreditCard, Smartphone, Eye, Download, Printer } from 'lucide-react';
+import PropTypes from 'prop-types';
 import { useToast } from '../context/ToastContext';
 import { ThermalReceipt } from './POS';
 
-const { ipcRenderer } = window.require('electron');
+const { ipcRenderer } = globalThis.require('electron');
 
 const PaymentBadge = ({ method }) => {
     const map = {
@@ -25,6 +26,10 @@ const PaymentBadge = ({ method }) => {
             <Icon className="h-3 w-3" />{cfg.label}
         </Badge>
     );
+};
+
+PaymentBadge.propTypes = {
+    method: PropTypes.string,
 };
 
 // Derive payment status from credit records
@@ -42,6 +47,10 @@ const PaymentStatusBadge = ({ status }) => {
     return null;
 };
 
+PaymentStatusBadge.propTypes = {
+    status: PropTypes.string.isRequired,
+};
+
 const FilterBtn = ({ active, onClick, children }) => (
     <button
         onClick={onClick}
@@ -54,6 +63,12 @@ const FilterBtn = ({ active, onClick, children }) => (
         {children}
     </button>
 );
+
+FilterBtn.propTypes = {
+    active: PropTypes.bool.isRequired,
+    onClick: PropTypes.func.isRequired,
+    children: PropTypes.node.isRequired,
+};
 
 const Orders = () => {
     const { orders, credits, cancelOrder, settings } = useShop();
@@ -317,7 +332,7 @@ const Orders = () => {
                                             <td className="px-4 py-3 max-w-[180px]">
                                                 <div className="space-y-0.5">
                                                     {(order.items || []).slice(0, 2).map((item, i) => (
-                                                        <p key={i} className="text-xs text-slate-600 truncate">
+                                                        <p key={`${item.name}-${i}`} className="text-xs text-slate-600 truncate">
                                                             {item.name}
                                                             <span className="text-slate-400 ml-1">×{item.quantity}</span>
                                                         </p>

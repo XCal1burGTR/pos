@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import PropTypes from 'prop-types';
 import { useShop } from '../context/ShopContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -7,6 +8,297 @@ import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Save, Plus, Layers, History, X, CheckCircle2, Sparkles } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
+
+// --- Stock Entry Form Component ---
+const StockEntryForm = ({ 
+    productName, setProductName, 
+    variantName, setVariantName, 
+    quantity, setQuantity, 
+    unitCost, setUnitCost, 
+    hasName, isExisting, matchedProduct, existingVariantKeys, 
+    handleSave 
+}) => {
+    return (
+        <Card className="lg:col-span-1 h-fit">
+            <CardHeader className="border-b border-slate-100">
+                <CardTitle className="flex items-center gap-2 text-sm">
+                    <div className="p-1.5 bg-emerald-50 rounded-lg">
+                        <Plus className="h-3.5 w-3.5 text-emerald-600" />
+                    </div>
+                    Stock In Entry
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-5">
+                <div className="space-y-4">
+                    {/* Product Name */}
+                    <div className="space-y-1.5">
+                        <label htmlFor="productNameInput" className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                            Product Name <span className="text-rose-500">*</span>
+                        </label>
+                        <Input
+                            id="productNameInput"
+                            placeholder="e.g. SIM Card, Phone Cover"
+                            value={productName}
+                            onChange={e => setProductName(e.target.value)}
+                        />
+                        {/* Status feedback */}
+                        {hasName && (
+                            <div className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg animate-in fade-in duration-150 ${isExisting ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-blue-50 text-blue-700 border border-blue-200'}`}>
+                                {isExisting
+                                    ? <><CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" /> Product already exists · {matchedProduct.stock} in stock</>
+                                    : <><Sparkles className="h-3.5 w-3.5 flex-shrink-0" /> New product will be created</>
+                                }
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Existing variants chips */}
+                    {isExisting && existingVariantKeys.length > 0 && (
+                        <div className="space-y-1.5 animate-in fade-in duration-150">
+                            <p className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                                Existing Variants
+                            </p>
+                            <div className="flex flex-wrap gap-1.5">
+                                {existingVariantKeys.map(vk => (
+                                    <button
+                                        key={vk}
+                                        type="button"
+                                        onClick={() => setVariantName(vk)}
+                                        className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${variantName === vk ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'}`}
+                                    >
+                                        {vk}
+                                        <span className={`ml-1.5 font-semibold ${variantName === vk ? 'text-indigo-200' : 'text-slate-400'}`}>
+                                            {matchedProduct.variants[vk]?.quantity ?? 0}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="text-[10px] text-slate-400">Tap a variant to select it, or type a new name below.</p>
+                        </div>
+                    )}
+
+                    {/* Variant Name */}
+                    <div className="space-y-1.5">
+                        <label htmlFor="variantNameInput" className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                            Variant / Type{' '}
+                            <span className="ml-1 font-normal normal-case text-slate-400">(optional)</span>
+                        </label>
+                        <Input
+                            id="variantNameInput"
+                            placeholder={isExisting ? 'e.g. Red, 128GB — or leave blank' : 'e.g. Red, XL — or leave blank'}
+                            value={variantName}
+                            onChange={e => setVariantName(e.target.value)}
+                        />
+                    </div>
+
+                    {/* Qty + Cost */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                            <label htmlFor="quantityInput" className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                                Add Qty <span className="text-rose-500">*</span>
+                            </label>
+                            <Input
+                                id="quantityInput"
+                                type="number"
+                                placeholder="0"
+                                min="1"
+                                value={quantity}
+                                onChange={e => setQuantity(e.target.value)}
+                                className="text-center"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label htmlFor="unitCostInput" className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                                Cost / Unit (₹)
+                            </label>
+                            <Input
+                                id="unitCostInput"
+                                type="number"
+                                placeholder="0.00"
+                                min="0"
+                                value={unitCost}
+                                onChange={e => setUnitCost(e.target.value)}
+                                className="text-center"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="pt-1 space-y-2">
+                        <Button onClick={handleSave} className="w-full" disabled={!hasName}>
+                            <Save className="h-4 w-4" />
+                            {isExisting ? 'Add Stock' : 'Create & Add Stock'}
+                        </Button>
+                        {hasName && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="w-full text-slate-400"
+                                onClick={() => { setProductName(''); setVariantName(''); setQuantity(''); setUnitCost(''); }}
+                            >
+                                <X className="h-3.5 w-3.5" /> Clear
+                            </Button>
+                        )}
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    );
+};
+StockEntryForm.propTypes = {
+    productName: PropTypes.string.isRequired,
+    setProductName: PropTypes.func.isRequired,
+    variantName: PropTypes.string.isRequired,
+    setVariantName: PropTypes.func.isRequired,
+    quantity: PropTypes.string.isRequired,
+    setQuantity: PropTypes.func.isRequired,
+    unitCost: PropTypes.string.isRequired,
+    setUnitCost: PropTypes.func.isRequired,
+    hasName: PropTypes.bool.isRequired,
+    isExisting: PropTypes.bool.isRequired,
+    matchedProduct: PropTypes.object,
+    existingVariantKeys: PropTypes.array.isRequired,
+    handleSave: PropTypes.func.isRequired,
+};
+
+// --- Render Stock Level Status Helper ---
+const renderStockLevel = (item) => {
+    if (item.isVariablePrice) {
+        return <Badge variant="purple">∞</Badge>;
+    }
+    const minAlert = item.minStockAlert || 5;
+    if (item.stock <= minAlert) {
+        return <Badge variant="danger">{item.stock}</Badge>;
+    }
+    return <Badge variant="success">{item.stock}</Badge>;
+};
+
+// --- Stock Levels Table ---
+const StockLevelsTable = ({ inventory }) => {
+    if (inventory.length === 0) {
+        return (
+            <EmptyState
+                icon={Layers}
+                title="No inventory yet"
+                description="Add products first, then use the form to add stock."
+            />
+        );
+    }
+
+    return (
+        <table className="w-full text-left text-sm min-w-[380px]">
+            <thead className="bg-slate-50/80 border-b border-slate-100 sticky top-0 z-10">
+                <tr>
+                    <th className="px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Product</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-center">Total Stock</th>
+                    <th className="px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden md:table-cell">Breakdown</th>
+                </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+                {inventory.map(item => (
+                    <tr key={item.id} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-2">
+                                <span className="font-medium text-slate-800">{item.name}</span>
+                                {item.isVariablePrice && <Badge variant="purple">Service</Badge>}
+                            </div>
+                        </td>
+                        <td className="px-4 py-3.5 text-center">
+                            {renderStockLevel(item)}
+                        </td>
+                        <td className="px-5 py-3.5 hidden md:table-cell">
+                            {item.variants && Object.keys(item.variants).length > 0 ? (
+                                <div className="flex flex-wrap gap-1.5">
+                                    {Object.entries(item.variants).map(([vName, vData]) => (
+                                        <span key={vName} className="text-xs bg-white border border-slate-200 px-2 py-0.5 rounded-lg shadow-sm text-slate-600">
+                                            {vName}: <b className="text-slate-800">{vData.quantity ?? 0}</b>
+                                        </span>
+                                    ))}
+                                </div>
+                            ) : (
+                                <span className="text-xs text-slate-400 italic">No variants</span>
+                            )}
+                        </td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    );
+};
+StockLevelsTable.propTypes = { inventory: PropTypes.array.isRequired };
+
+// --- Purchase Logs Table ---
+const formatLogDate = (dateStr) => {
+    try {
+        return new Date(dateStr).toLocaleString([], {
+            month: 'short', day: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+    } catch { return '—'; }
+};
+
+const PurchaseLogsTable = ({ filteredLogs, logSearch }) => {
+    if (filteredLogs.length === 0) {
+        return (
+            <EmptyState
+                icon={History}
+                title={logSearch ? 'No matches' : 'No purchase logs yet'}
+                description={logSearch ? 'Try a different search term.' : 'Logs appear here after you add stock.'}
+            />
+        );
+    }
+
+    const totalSpent = filteredLogs.reduce((s, l) => s + (l.totalCost || 0), 0).toFixed(2);
+
+    return (
+        <table className="w-full text-left text-sm min-w-[520px]">
+            <thead className="bg-slate-50/80 border-b border-slate-100 sticky top-0 z-10">
+                <tr>
+                    <th className="px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Date</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Product</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-center">Qty</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-right">Cost/Unit</th>
+                    <th className="px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-right">Total</th>
+                </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+                {filteredLogs.map(log => (
+                    <tr key={log.id} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="px-5 py-3 text-xs text-slate-500 whitespace-nowrap">
+                            {formatLogDate(log.date)}
+                        </td>
+                        <td className="px-4 py-3">
+                            <p className="font-medium text-slate-800 text-sm">{log.productName}</p>
+                            {log.note && (
+                                <p className="text-xs text-slate-400 mt-0.5">{log.note}</p>
+                            )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                            <Badge variant="primary">+{log.quantity}</Badge>
+                        </td>
+                        <td className="px-4 py-3 text-right text-slate-600 text-sm">
+                            ₹{(log.unitCost || 0).toFixed(2)}
+                        </td>
+                        <td className="px-5 py-3 text-right font-semibold text-slate-800">
+                            ₹{(log.totalCost || 0).toFixed(2)}
+                        </td>
+                    </tr>
+                ))}
+            </tbody>
+            <tfoot className="bg-slate-50/80 border-t border-slate-200 sticky bottom-0">
+                <tr>
+                    <td colSpan="4" className="px-5 py-2.5 text-xs font-semibold text-slate-500 text-right uppercase tracking-wide">
+                        Total spent ({filteredLogs.length} entries)
+                    </td>
+                    <td className="px-5 py-2.5 text-right font-bold text-slate-900">
+                        ₹{totalSpent}
+                    </td>
+                </tr>
+            </tfoot>
+        </table>
+    );
+};
+PurchaseLogsTable.propTypes = { filteredLogs: PropTypes.array.isRequired, logSearch: PropTypes.string.isRequired };
 
 const Inventory = ({ onNavigate }) => {
     const { inventory, stockLogs, addStock } = useShop();
@@ -37,8 +329,8 @@ const Inventory = ({ onNavigate }) => {
             toast({ title: 'Enter a product name', type: 'error' });
             return;
         }
-        const qty = parseInt(quantity);
-        if (isNaN(qty) || qty <= 0) {
+        const qty = Number.parseInt(quantity);
+        if (Number.isNaN(qty) || qty <= 0) {
             toast({ title: 'Enter a valid quantity', type: 'error' });
             return;
         }
@@ -46,13 +338,13 @@ const Inventory = ({ onNavigate }) => {
         addStock([{
             name: productName.trim(),
             quantity: qty,
-            unitCost: parseFloat(unitCost) || 0,
+            unitCost: Number.parseFloat(unitCost) || 0,
             note,
             isVariablePrice: matchedProduct?.isVariablePrice || false,
         }]);
         toast({
             title: isExisting ? 'Stock updated' : 'Product created',
-            description: `${productName.trim()}${note ? ` · ${note}` : ''}`,
+            description: note ? `${productName.trim()} · ${note}` : productName.trim(),
             type: 'success'
         });
         setProductName('');
@@ -69,149 +361,20 @@ const Inventory = ({ onNavigate }) => {
         )
         : safeLogs;
 
-    const formatLogDate = (dateStr) => {
-        try {
-            return new Date(dateStr).toLocaleString([], {
-                month: 'short', day: 'numeric',
-                hour: '2-digit', minute: '2-digit'
-            });
-        } catch { return '—'; }
-    };
-
     return (
         <div className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
                 {/* ── Stock Entry ── */}
-                <Card className="lg:col-span-1 h-fit">
-                    <CardHeader className="border-b border-slate-100">
-                        <CardTitle className="flex items-center gap-2 text-sm">
-                            <div className="p-1.5 bg-emerald-50 rounded-lg">
-                                <Plus className="h-3.5 w-3.5 text-emerald-600" />
-                            </div>
-                            Stock In Entry
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-5">
-                        <div className="space-y-4">
-
-                            {/* Product Name */}
-                            <div className="space-y-1.5">
-                                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                                    Product Name <span className="text-rose-500">*</span>
-                                </label>
-                                <Input
-                                    placeholder="e.g. SIM Card, Phone Cover"
-                                    value={productName}
-                                    onChange={e => setProductName(e.target.value)}
-                                />
-                                {/* Status feedback */}
-                                {hasName && (
-                                    <div className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg animate-in fade-in duration-150 ${
-                                        isExisting
-                                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                            : 'bg-blue-50 text-blue-700 border border-blue-200'
-                                    }`}>
-                                        {isExisting
-                                            ? <><CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" /> Product already exists · {matchedProduct.stock} in stock</>
-                                            : <><Sparkles className="h-3.5 w-3.5 flex-shrink-0" /> New product will be created</>
-                                        }
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Existing variants chips */}
-                            {isExisting && existingVariantKeys.length > 0 && (
-                                <div className="space-y-1.5 animate-in fade-in duration-150">
-                                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                                        Existing Variants
-                                    </label>
-                                    <div className="flex flex-wrap gap-1.5">
-                                        {existingVariantKeys.map(vk => (
-                                            <button
-                                                key={vk}
-                                                type="button"
-                                                onClick={() => setVariantName(vk)}
-                                                className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${
-                                                    variantName === vk
-                                                        ? 'bg-indigo-600 text-white border-indigo-600'
-                                                        : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'
-                                                }`}
-                                            >
-                                                {vk}
-                                                <span className={`ml-1.5 font-semibold ${variantName === vk ? 'text-indigo-200' : 'text-slate-400'}`}>
-                                                    {matchedProduct.variants[vk]?.quantity ?? 0}
-                                                </span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <p className="text-[10px] text-slate-400">Tap a variant to select it, or type a new name below.</p>
-                                </div>
-                            )}
-
-                            {/* Variant Name */}
-                            <div className="space-y-1.5">
-                                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                                    Variant / Type
-                                    <span className="ml-1 font-normal normal-case text-slate-400">(optional)</span>
-                                </label>
-                                <Input
-                                    placeholder={isExisting ? 'e.g. Red, 128GB — or leave blank' : 'e.g. Red, XL — or leave blank'}
-                                    value={variantName}
-                                    onChange={e => setVariantName(e.target.value)}
-                                />
-                            </div>
-
-                            {/* Qty + Cost */}
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                                        Add Qty <span className="text-rose-500">*</span>
-                                    </label>
-                                    <Input
-                                        type="number"
-                                        placeholder="0"
-                                        min="1"
-                                        value={quantity}
-                                        onChange={e => setQuantity(e.target.value)}
-                                        className="text-center"
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                                        Cost / Unit (₹)
-                                    </label>
-                                    <Input
-                                        type="number"
-                                        placeholder="0.00"
-                                        min="0"
-                                        value={unitCost}
-                                        onChange={e => setUnitCost(e.target.value)}
-                                        className="text-center"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Actions */}
-                            <div className="pt-1 space-y-2">
-                                <Button onClick={handleSave} className="w-full" disabled={!hasName}>
-                                    <Save className="h-4 w-4" />
-                                    {isExisting ? 'Add Stock' : 'Create & Add Stock'}
-                                </Button>
-                                {hasName && (
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="w-full text-slate-400"
-                                        onClick={() => { setProductName(''); setVariantName(''); setQuantity(''); setUnitCost(''); }}
-                                    >
-                                        <X className="h-3.5 w-3.5" /> Clear
-                                    </Button>
-                                )}
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
+                <StockEntryForm 
+                    productName={productName} setProductName={setProductName}
+                    variantName={variantName} setVariantName={setVariantName}
+                    quantity={quantity} setQuantity={setQuantity}
+                    unitCost={unitCost} setUnitCost={setUnitCost}
+                    hasName={hasName} isExisting={isExisting} 
+                    matchedProduct={matchedProduct} existingVariantKeys={existingVariantKeys}
+                    handleSave={handleSave} 
+                />
 
                 {/* ── Right Panel: Stock Levels + Purchase Log ── */}
                 <Card className="lg:col-span-2 flex flex-col overflow-hidden h-fit" style={{ maxHeight: 'calc(100vh - 13rem)' }}>
@@ -256,123 +419,17 @@ const Inventory = ({ onNavigate }) => {
                     </CardHeader>
 
                     <div className="flex-1 overflow-auto custom-scrollbar">
-
-                        {/* ── Stock Levels Tab ── */}
-                        {activeTab === 'stock' && (
-                            inventory.length === 0 ? (
-                                <EmptyState
-                                    icon={Layers}
-                                    title="No inventory yet"
-                                    description="Add products first, then use the form to add stock."
-                                />
-                            ) : (
-                                <table className="w-full text-left text-sm min-w-[380px]">
-                                    <thead className="bg-slate-50/80 border-b border-slate-100 sticky top-0 z-10">
-                                        <tr>
-                                            <th className="px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Product</th>
-                                            <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-center">Total Stock</th>
-                                            <th className="px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide hidden md:table-cell">Breakdown</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-50">
-                                        {inventory.map(item => (
-                                            <tr key={item.id} className="hover:bg-slate-50/60 transition-colors">
-                                                <td className="px-5 py-3.5">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-medium text-slate-800">{item.name}</span>
-                                                        {item.isVariablePrice && <Badge variant="purple">Service</Badge>}
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-3.5 text-center">
-                                                    {item.isVariablePrice ? (
-                                                        <Badge variant="purple">∞</Badge>
-                                                    ) : item.stock <= (item.minStockAlert || 5) ? (
-                                                        <Badge variant="danger">{item.stock}</Badge>
-                                                    ) : (
-                                                        <Badge variant="success">{item.stock}</Badge>
-                                                    )}
-                                                </td>
-                                                <td className="px-5 py-3.5 hidden md:table-cell">
-                                                    {item.variants && Object.keys(item.variants).length > 0 ? (
-                                                        <div className="flex flex-wrap gap-1.5">
-                                                            {Object.entries(item.variants).map(([vName, vData]) => (
-                                                                <span key={vName} className="text-xs bg-white border border-slate-200 px-2 py-0.5 rounded-lg shadow-sm text-slate-600">
-                                                                    {vName}: <b className="text-slate-800">{vData.quantity ?? 0}</b>
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-xs text-slate-400 italic">No variants</span>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            )
-                        )}
-
-                        {/* ── Purchase Log Tab ── */}
-                        {activeTab === 'logs' && (
-                            filteredLogs.length === 0 ? (
-                                <EmptyState
-                                    icon={History}
-                                    title={logSearch ? 'No matches' : 'No purchase logs yet'}
-                                    description={logSearch ? 'Try a different search term.' : 'Logs appear here after you add stock.'}
-                                />
-                            ) : (
-                                <table className="w-full text-left text-sm min-w-[520px]">
-                                    <thead className="bg-slate-50/80 border-b border-slate-100 sticky top-0 z-10">
-                                        <tr>
-                                            <th className="px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Date</th>
-                                            <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Product</th>
-                                            <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-center">Qty</th>
-                                            <th className="px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-right">Cost/Unit</th>
-                                            <th className="px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide text-right">Total</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-50">
-                                        {filteredLogs.map(log => (
-                                            <tr key={log.id} className="hover:bg-slate-50/60 transition-colors">
-                                                <td className="px-5 py-3 text-xs text-slate-500 whitespace-nowrap">
-                                                    {formatLogDate(log.date)}
-                                                </td>
-                                                <td className="px-4 py-3">
-                                                    <p className="font-medium text-slate-800 text-sm">{log.productName}</p>
-                                                    {log.note && (
-                                                        <p className="text-xs text-slate-400 mt-0.5">{log.note}</p>
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3 text-center">
-                                                    <Badge variant="primary">+{log.quantity}</Badge>
-                                                </td>
-                                                <td className="px-4 py-3 text-right text-slate-600 text-sm">
-                                                    ₹{(log.unitCost || 0).toFixed(2)}
-                                                </td>
-                                                <td className="px-5 py-3 text-right font-semibold text-slate-800">
-                                                    ₹{(log.totalCost || 0).toFixed(2)}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                    <tfoot className="bg-slate-50/80 border-t border-slate-200 sticky bottom-0">
-                                        <tr>
-                                            <td colSpan="4" className="px-5 py-2.5 text-xs font-semibold text-slate-500 text-right uppercase tracking-wide">
-                                                Total spent ({filteredLogs.length} entries)
-                                            </td>
-                                            <td className="px-5 py-2.5 text-right font-bold text-slate-900">
-                                                ₹{filteredLogs.reduce((s, l) => s + (l.totalCost || 0), 0).toFixed(2)}
-                                            </td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
-                            )
-                        )}
+                        {activeTab === 'stock' && <StockLevelsTable inventory={inventory} />}
+                        {activeTab === 'logs' && <PurchaseLogsTable filteredLogs={filteredLogs} logSearch={logSearch} />}
                     </div>
                 </Card>
             </div>
         </div>
     );
+};
+
+Inventory.propTypes = {
+    onNavigate: PropTypes.func, // It may not be required based on previous analysis of unused props, making it optional is safer.
 };
 
 export default Inventory;

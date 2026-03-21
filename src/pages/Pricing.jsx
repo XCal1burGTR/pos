@@ -32,8 +32,8 @@ const Pricing = () => {
             if (matchedProduct.variants && Object.keys(matchedProduct.variants).length > 0) {
                 Object.entries(matchedProduct.variants).forEach(([vName, vData]) => {
                     newPrices[vName] = {
-                        price: vData.price !== undefined ? String(vData.price) : '',
-                        gst: vData.gstRate !== undefined ? String(vData.gstRate) : '0'
+                        price: vData.price === undefined ? '' : String(vData.price),
+                        gst: vData.gstRate === undefined ? '0' : String(vData.gstRate)
                     };
                 });
             } else {
@@ -63,7 +63,8 @@ const Pricing = () => {
         }
         if (!isVariable) {
             for (const [vName, data] of Object.entries(variantPrices)) {
-                if (isNaN(parseFloat(data.price)) || parseFloat(data.price) < 0) {
+                const p = Number.parseFloat(data.price);
+                if (Number.isNaN(p) || p < 0) {
                     toast({ title: 'Invalid price', description: `Check price for ${vName}`, type: 'error' });
                     return;
                 }
@@ -74,14 +75,14 @@ const Pricing = () => {
             let updatedFields = { isVariablePrice: isVariable };
             if (!matchedProduct.variants || Object.keys(matchedProduct.variants).length === 0) {
                 const d = variantPrices['Default'];
-                updatedFields.price = parseFloat(d.price) || 0;
-                updatedFields.gstRate = parseFloat(d.gst) || 0;
+                updatedFields.price = Number.parseFloat(d.price) || 0;
+                updatedFields.gstRate = Number.parseFloat(d.gst) || 0;
             } else {
                 const updatedVariants = { ...matchedProduct.variants };
                 let firstPrice = 0;
                 Object.entries(variantPrices).forEach(([vName, data], idx) => {
                     if (!updatedVariants[vName]) updatedVariants[vName] = {};
-                    updatedVariants[vName] = { ...updatedVariants[vName], price: parseFloat(data.price) || 0, gstRate: parseFloat(data.gst) || 0 };
+                    updatedVariants[vName] = { ...updatedVariants[vName], price: Number.parseFloat(data.price) || 0, gstRate: Number.parseFloat(data.gst) || 0 };
                     if (idx === 0) firstPrice = updatedVariants[vName].price;
                 });
                 updatedFields.variants = updatedVariants;
@@ -92,8 +93,8 @@ const Pricing = () => {
         } else {
             addProduct({
                 name: productName.trim(),
-                price: parseFloat(variantPrices['Default']?.price) || 0,
-                gstRate: parseFloat(variantPrices['Default']?.gst) || 0,
+                price: Number.parseFloat(variantPrices['Default']?.price) || 0,
+                gstRate: Number.parseFloat(variantPrices['Default']?.gst) || 0,
                 stock: 0,
                 isVariablePrice: isVariable,
                 variants: {}
@@ -125,10 +126,11 @@ const Pricing = () => {
 
                             {/* Product Name */}
                             <div className="space-y-1.5">
-                                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                                <label htmlFor="productName" className="block text-xs font-semibold text-slate-500 uppercase tracking-wide">
                                     Product Name <span className="text-rose-500">*</span>
                                 </label>
                                 <Input
+                                    id="productName"
                                     placeholder="e.g. SIM Card, Phone Cover"
                                     value={productName}
                                     onChange={e => setProductName(e.target.value)}
@@ -148,8 +150,9 @@ const Pricing = () => {
                             </div>
 
                             {/* Variable price toggle */}
-                            <label className="flex items-center gap-3 p-3 bg-indigo-50/50 rounded-lg border border-indigo-100 cursor-pointer">
+                            <label htmlFor="isVariable" aria-label="Variable Price" className="flex items-center gap-3 p-3 bg-indigo-50/50 rounded-lg border border-indigo-100 cursor-pointer">
                                 <input
+                                    id="isVariable"
                                     type="checkbox"
                                     checked={isVariable}
                                     onChange={e => setIsVariable(e.target.checked)}
@@ -167,7 +170,7 @@ const Pricing = () => {
                                     const cost = variant === 'Default'
                                         ? (matchedProduct?.avgCostPrice || 0)
                                         : (matchedProduct?.variants?.[variant]?.avgCost || 0);
-                                    const margin = (parseFloat(data.price) || 0) - cost;
+                                    const margin = (Number.parseFloat(data.price) || 0) - cost;
 
                                     return (
                                         <div key={variant} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
@@ -182,8 +185,9 @@ const Pricing = () => {
                                             </div>
                                             <div className="grid grid-cols-2 gap-2">
                                                 <div className="space-y-1">
-                                                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Selling Price</label>
+                                                    <label htmlFor={`price-${variant}`} className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Selling Price</label>
                                                     <Input
+                                                        id={`price-${variant}`}
                                                         type="number"
                                                         value={data.price}
                                                         onChange={e => handlePriceChange(variant, 'price', e.target.value)}
@@ -194,8 +198,9 @@ const Pricing = () => {
                                                     />
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">GST %</label>
+                                                    <label htmlFor={`gst-${variant}`} className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">GST %</label>
                                                     <Input
+                                                        id={`gst-${variant}`}
                                                         type="number"
                                                         value={data.gst}
                                                         onChange={e => handlePriceChange(variant, 'gst', e.target.value)}

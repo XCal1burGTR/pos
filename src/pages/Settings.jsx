@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { cn } from '../utils/cn';
+import PropTypes from 'prop-types';
 import Cropper from 'react-easy-crop';
 
 const getCroppedImg = async (imageSrc, pixelCrop) => {
@@ -32,12 +33,23 @@ const FormField = ({ label, required, children, className = '' }) => (
     </div>
 );
 
+FormField.propTypes = {
+    label: PropTypes.string.isRequired,
+    required: PropTypes.bool,
+    children: PropTypes.node.isRequired,
+    className: PropTypes.string,
+};
+
 const IconInput = ({ icon: Icon, ...props }) => (
     <div className="relative">
         {Icon && <Icon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />}
         <Input {...props} className={Icon ? 'pl-9' : ''} />
     </div>
 );
+
+IconInput.propTypes = {
+    icon: PropTypes.elementType,
+};
 
 const TABS = [
     { id: 'store',   label: 'Store',   icon: Building },
@@ -94,7 +106,7 @@ const Settings = () => {
     };
 
     const handleSubmit = (e) => {
-        if (e && e.preventDefault) e.preventDefault();
+        e?.preventDefault?.();
         setIsSaving(true);
         updateSettings(formData);
         setTimeout(() => {
@@ -121,13 +133,10 @@ const Settings = () => {
                         onClick={() => setActiveTab(id)}
                         className={cn(
                             'flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all',
-                            activeTab === id
-                                ? id === 'danger'
-                                    ? 'bg-white text-rose-600 shadow-sm'
-                                    : 'bg-white text-slate-900 shadow-sm'
-                                : id === 'danger'
-                                    ? 'text-rose-400 hover:text-rose-600'
-                                    : 'text-slate-500 hover:text-slate-700'
+                            activeTab === id && id === 'danger' && 'bg-white text-rose-600 shadow-sm',
+                            activeTab === id && id !== 'danger' && 'bg-white text-slate-900 shadow-sm',
+                            activeTab !== id && id === 'danger' && 'text-rose-400 hover:text-rose-600',
+                            activeTab !== id && id !== 'danger' && 'text-slate-500 hover:text-slate-700'
                         )}
                     >
                         <Icon className="h-3.5 w-3.5" />

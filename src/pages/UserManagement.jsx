@@ -10,6 +10,7 @@ import {
     Trash2, AlertTriangle, CalendarDays, ShieldCheck, UserX, Clock, Plus, X as XIcon
 } from 'lucide-react';
 import { cn } from '../utils/cn';
+import PropTypes from 'prop-types';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const fmtDate = (iso) => {
@@ -44,6 +45,10 @@ const StatusBadge = ({ status }) => {
     );
 };
 
+StatusBadge.propTypes = {
+    status: PropTypes.string.isRequired,
+};
+
 // ── Password cell ─────────────────────────────────────────────────────────────
 const PasswordCell = ({ password }) => {
     const [show, setShow] = useState(false);
@@ -56,6 +61,10 @@ const PasswordCell = ({ password }) => {
             </button>
         </span>
     );
+};
+
+PasswordCell.propTypes = {
+    password: PropTypes.string.isRequired,
 };
 
 // ── Blank batch row ───────────────────────────────────────────────────────────
@@ -86,6 +95,13 @@ const ValidityToggle = ({ row, onChange }) => (
     </div>
 );
 
+ValidityToggle.propTypes = {
+    row: PropTypes.shape({
+        validityType: PropTypes.string.isRequired,
+    }).isRequired,
+    onChange: PropTypes.func.isRequired,
+};
+
 // ── UserManagement page ───────────────────────────────────────────────────────
 const UserManagement = () => {
     const { users, getUserStatus, createUsers, updateUser, deleteUser, resetUserPassword } = useAuth();
@@ -101,29 +117,42 @@ const UserManagement = () => {
     const removeRow = (id) =>
         setRows(prev => prev.length > 1 ? prev.filter(r => r._id !== id) : prev);
 
+    const validateUserRow = (r, idx, filledRows, existingUsernames) => {
+        const label = filledRows.length > 1 ? `Row ${idx + 1}: ` : '';
+        if (!r.username.trim()) return `${label}Username is required.`;
+        if (!r.password)        return `${label}Password is required.`;
+        if (r.password.length < 6) return `${label}Password must be at least 6 characters.`;
+        if (r.email && !isValidEmail(r.email)) return `${label}Email is not valid.`;
+
+        const uLower = r.username.trim().toLowerCase();
+        if (existingUsernames.has(uLower))
+            return `${label}Username "${r.username.trim()}" already exists.`;
+        
+        const isDuplicateInBatch = filledRows.slice(0, idx).some(prev => 
+            prev.username.trim().toLowerCase() === uLower
+        );
+        if (isDuplicateInBatch)
+            return `${label}Username "${r.username.trim()}" is duplicated in this batch.`;
+        
+        return null;
+    };
+
     const handleBatchCreate = () => {
         setBatchErr('');
-        const existingUsernames = users.map(u => u.username.toLowerCase());
+        const existingSet = new Set(users.map(u => u.username.toLowerCase()));
 
-        // Filter out completely empty rows (no username, password, or email)
         const filledRows = rows.filter(r => r.username.trim() || r.password || r.email.trim());
-        if (filledRows.length === 0) return setBatchErr('Fill in at least one user row.');
+        if (filledRows.length === 0) {
+            setBatchErr('Fill in at least one user row.');
+            return;
+        }
 
-        // Validate each filled row
         for (let i = 0; i < filledRows.length; i++) {
-            const r = filledRows[i];
-            const label = filledRows.length > 1 ? `Row ${i + 1}: ` : '';
-            if (!r.username.trim()) return setBatchErr(`${label}Username is required.`);
-            if (!r.password)        return setBatchErr(`${label}Password is required.`);
-            if (r.password.length < 6) return setBatchErr(`${label}Password must be at least 6 characters.`);
-            if (r.email && !isValidEmail(r.email)) return setBatchErr(`${label}Email is not valid.`);
-
-            const uLower = r.username.trim().toLowerCase();
-            if (existingUsernames.includes(uLower))
-                return setBatchErr(`${label}Username "${r.username.trim()}" already exists.`);
-            // Check uniqueness within batch
-            if (filledRows.slice(0, i).some(prev => prev.username.trim().toLowerCase() === uLower))
-                return setBatchErr(`${label}Username "${r.username.trim()}" is duplicated in this batch.`);
+            const error = validateUserRow(filledRows[i], i, filledRows, existingSet);
+            if (error) {
+                setBatchErr(error);
+                return;
+            }
         }
 
         createUsers(filledRows.map(r => ({
@@ -409,11 +438,12 @@ const UserManagement = () => {
                                     />
                                 )}
                                 <p className="text-[11px] text-slate-400 ml-1">
-                                    {row.validityType === 'days'
-                                        ? (row.validityDays > 0
-                                            ? `Expires ${fmtDate(new Date(Date.now() + Number(row.validityDays) * 86_400_000).toISOString())}`
-                                            : 'Leave blank = no expiry')
-                                        : (row.validityDate ? `Expires ${fmtDate(row.validityDate)}` : 'Leave blank = no expiry')}
+                                    {row.validityType === 'days' && (row.validityDays > 0
+                                        ? `Expires ${fmtDate(new Date(Date.now() + Number(row.validityDays) * 86_400_000).toISOString())}`
+                                        : 'Leave blank = no expiry')}
+                                    {row.validityType === 'date' && (row.validityDate 
+                                        ? `Expires ${fmtDate(row.validityDate)}` 
+                                        : 'Leave blank = no expiry')}
                                 </p>
                             </div>
                         </div>
@@ -443,17 +473,17 @@ const UserManagement = () => {
             <Modal isOpen={!!editUser} onClose={() => setEditUser(null)} title="Edit User" size="sm">
                 <ModalBody className="space-y-4">
                     <div>
-                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+                        <label htmlFor="editUsername" className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
                             Username <span className="text-rose-500">*</span>
                         </label>
-                        <Input value={editForm.username || ''} autoFocus
+                        <Input id="editUsername" value={editForm.username || ''} autoFocus
                             onChange={e => setEditForm({ ...editForm, username: e.target.value })} />
                     </div>
                     <div>
-                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+                        <label htmlFor="editEmail" className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
                             Email
                         </label>
-                        <Input type="email" value={editForm.email || ''}
+                        <Input id="editEmail" type="email" value={editForm.email || ''}
                             onChange={e => setEditForm({ ...editForm, email: e.target.value })}
                             placeholder="Optional contact email" />
                     </div>
@@ -503,11 +533,11 @@ const UserManagement = () => {
                         </p>
                     )}
                     <div>
-                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+                        <label htmlFor="newPassword" className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
                             New Password <span className="text-rose-500">*</span>
                         </label>
                         <div className="relative">
-                            <Input type={showNewPass ? 'text' : 'password'} value={newPass}
+                            <Input id="newPassword" type={showNewPass ? 'text' : 'password'} value={newPass}
                                 onChange={e => setNewPass(e.target.value)} placeholder="Min 6 characters"
                                 autoFocus className="pr-10" />
                             <button type="button" onClick={() => setShowNewPass(v => !v)}

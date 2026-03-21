@@ -53,10 +53,11 @@ const Login = () => {
 
                         {/* Username */}
                         <div>
-                            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                            <label htmlFor="username" className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
                                 Username
                             </label>
                             <Input
+                                id="username"
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
                                 placeholder="Enter your username"
@@ -69,11 +70,12 @@ const Login = () => {
 
                         {/* Password */}
                         <div>
-                            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
+                            <label htmlFor="password" className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
                                 Password
                             </label>
                             <div className="relative">
                                 <Input
+                                    id="password"
                                     type={showPass ? 'text' : 'password'}
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}

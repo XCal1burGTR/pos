@@ -4,7 +4,7 @@ import { ShopProvider, useShop } from './context/ShopContext';
 import { ToastProvider } from './context/ToastContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
-import POS from './pages/POS';
+import Pos from './pages/POS';
 import Orders from './pages/Orders';
 import Products from './pages/Products';
 import Settings from './pages/Settings';
@@ -19,6 +19,7 @@ import {
     Banknote, Smartphone, CreditCard
 } from 'lucide-react';
 import { cn } from './utils/cn';
+import PropTypes from 'prop-types';
 
 // ── Stat card ────────────────────────────────────────────────────────────────
 const StatCard = ({ label, value, sub, icon: Icon, color, onClick }) => (
@@ -41,6 +42,19 @@ const StatCard = ({ label, value, sub, icon: Icon, color, onClick }) => (
         {sub && <p className="text-[10px] sm:text-xs text-slate-400 mt-1">{sub}</p>}
     </button>
 );
+
+StatCard.propTypes = {
+    label: PropTypes.string.isRequired,
+    value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    sub: PropTypes.string,
+    icon: PropTypes.elementType.isRequired,
+    color: PropTypes.shape({
+        bg: PropTypes.string.isRequired,
+        icon: PropTypes.string.isRequired,
+        text: PropTypes.string.isRequired,
+    }).isRequired,
+    onClick: PropTypes.func.isRequired,
+};
 
 
 // ── Period helpers ────────────────────────────────────────────────────────────
@@ -98,16 +112,14 @@ const PeriodTabs = ({ value, onChange }) => (
     </div>
 );
 
-// ── Dashboard ────────────────────────────────────────────────────────────────
-function Dashboard({ onNavigate }) {
-    const { inventory, orders, credits } = useShop();
-    const [period, setPeriod] = useState('today');
+PeriodTabs.propTypes = {
+    value: PropTypes.string.isRequired,
+    onChange: PropTypes.func.isRequired,
+};
 
-    const stats = useMemo(() => calcStats(orders, period), [orders, period]);
-    const fmt = (n) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
-
-    // Build flat list of alert items including variant stock
-    const stockAlertItems = inventory.flatMap(product => {
+// ── Dashboard helpers ─────────────────────────────────────────────────────────
+function getStockAlertItems(inventory) {
+    return inventory.flatMap(product => {
         if (product.isVariablePrice) return [];
         const threshold = product.minStockAlert || 5;
         const hasVariants = product.variants && Object.keys(product.variants).length > 0;
@@ -125,31 +137,74 @@ function Dashboard({ onNavigate }) {
         }
         return [];
     });
-    const lowStockItems = stockAlertItems.filter(i => !i.isOutOfStock);
-    const outOfStockItems = stockAlertItems.filter(i => i.isOutOfStock);
+}
+
+function calcCollectionByMethod(orders, period) {
+    const periodStart = getPeriodStart(period);
+    return (Array.isArray(orders) ? orders : [])
+        .filter(o => o.status === 'completed' && o.date && new Date(o.date) >= periodStart)
+        .reduce((acc, o) => {
+            const m = o.paymentMethod || 'cash';
+            const paid = o.tenderedAmount == null ? (o.finalTotal || 0) : Math.min(o.tenderedAmount, o.finalTotal || 0);
+            acc[m] = (acc[m] || 0) + paid;
+            return acc;
+        }, {});
+}
+
+function getCreditStats(credits) {
     const pendingCredits = (credits || []).filter(c => c.status === 'pending');
     const totalCreditDue = pendingCredits.reduce((s, c) => s + (c.pendingAmount || 0), 0);
     const totalCreditCollected = (credits || []).reduce((s, c) =>
         s + (c.payments || []).reduce((ps, p) => ps + (p.amount || 0), 0), 0);
+    return { pendingCredits, totalCreditDue, totalCreditCollected };
+}
+
+function getLowStockColor(outOfStockCount, alertCount) {
+    if (outOfStockCount > 0) return { bg: 'bg-rose-50', icon: 'text-rose-600', text: 'text-rose-700' };
+    if (alertCount > 0) return { bg: 'bg-amber-50', icon: 'text-amber-600', text: 'text-amber-700' };
+    return { bg: 'bg-emerald-50', icon: 'text-emerald-600', text: 'text-emerald-700' };
+}
+
+function getLowStockSub(outOfStockCount, alertCount) {
+    if (outOfStockCount > 0) return `${outOfStockCount} out of stock`;
+    if (alertCount > 0) return 'Needs restocking';
+    return 'All levels healthy';
+}
+
+function getProfitColor(hasCost, profit) {
+    if (hasCost && profit < 0) return { bg: 'bg-rose-50', icon: 'text-rose-600', text: 'text-rose-700' };
+    return { bg: 'bg-emerald-50', icon: 'text-emerald-600', text: 'text-emerald-700' };
+}
+
+function getProfitSub(hasCost, margin) {
+    if (!hasCost) return 'Add cost prices to unlock';
+    return margin == null ? '' : `${margin.toFixed(1)}% margin`;
+}
+
+function getAdminProfitSub(hasCost, margin) {
+    if (!hasCost) return 'Add cost prices to products';
+    return margin == null ? '' : `${margin.toFixed(1)}% margin`;
+}
+
+// ── Dashboard ────────────────────────────────────────────────────────────────
+function Dashboard({ onNavigate }) {
+    const { inventory, orders, credits } = useShop();
+    const [period, setPeriod] = useState('today');
+
+    const stats = useMemo(() => calcStats(orders, period), [orders, period]);
+    const fmt = (n) => `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+
+    const stockAlertItems = getStockAlertItems(inventory);
+    const lowStockItems = stockAlertItems.filter(i => !i.isOutOfStock);
+    const outOfStockItems = stockAlertItems.filter(i => i.isOutOfStock);
+    const { pendingCredits, totalCreditDue, totalCreditCollected } = getCreditStats(credits);
 
     const completed = Array.isArray(orders) ? orders.filter(o => o.status === 'completed') : [];
     const recentOrders = [...completed]
         .sort((a, b) => new Date(b.date) - new Date(a.date))
         .slice(0, 3);
 
-    // Payment method collection filtered by selected period
-    const periodStart = getPeriodStart(period);
-    const collectionByMethod = useMemo(() => {
-        return completed
-            .filter(o => o.date && new Date(o.date) >= periodStart)
-            .reduce((acc, o) => {
-                const m = o.paymentMethod || 'cash';
-                const paid = o.tenderedAmount != null ? Math.min(o.tenderedAmount, o.finalTotal || 0) : (o.finalTotal || 0);
-                acc[m] = (acc[m] || 0) + paid;
-                return acc;
-            }, {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [orders, period]);
+    const collectionByMethod = useMemo(() => calcCollectionByMethod(orders, period), [orders, period]);
 
     return (
         <div className="space-y-5">
@@ -185,7 +240,7 @@ function Dashboard({ onNavigate }) {
                 <StatCard
                     label="Revenue"
                     value={fmt(stats.revenue)}
-                    sub={`${stats.orders} order${stats.orders !== 1 ? 's' : ''}`}
+                    sub={`${stats.orders} order${stats.orders === 1 ? '' : 's'}`}
                     icon={TrendingUp}
                     color={{ bg: "bg-indigo-50", icon: "text-indigo-600", text: "text-indigo-700" }}
                     onClick={() => onNavigate('orders')}
@@ -229,19 +284,15 @@ function Dashboard({ onNavigate }) {
                 <StatCard
                     label="Low Stock"
                     value={stockAlertItems.length}
-                    sub={outOfStockItems.length > 0 ? `${outOfStockItems.length} out of stock` : stockAlertItems.length > 0 ? "Needs restocking" : "All levels healthy"}
+                    sub={getLowStockSub(outOfStockItems.length, stockAlertItems.length)}
                     icon={AlertTriangle}
-                    color={{
-                        bg: outOfStockItems.length > 0 ? "bg-rose-50" : stockAlertItems.length > 0 ? "bg-amber-50" : "bg-emerald-50",
-                        icon: outOfStockItems.length > 0 ? "text-rose-600" : stockAlertItems.length > 0 ? "text-amber-600" : "text-emerald-600",
-                        text: outOfStockItems.length > 0 ? "text-rose-700" : stockAlertItems.length > 0 ? "text-amber-700" : "text-emerald-700",
-                    }}
+                    color={getLowStockColor(outOfStockItems.length, stockAlertItems.length)}
                     onClick={() => onNavigate('products')}
                 />
                 <StatCard
                     label="Credit Due"
                     value={fmt(totalCreditDue)}
-                    sub={`${pendingCredits.length} customer${pendingCredits.length !== 1 ? 's' : ''} pending`}
+                    sub={`${pendingCredits.length} customer${pendingCredits.length === 1 ? '' : 's'} pending`}
                     icon={Wallet}
                     color={{ bg: "bg-amber-50", icon: "text-amber-600", text: totalCreditDue > 0 ? "text-amber-700" : "text-slate-500" }}
                     onClick={() => onNavigate('credit')}
@@ -269,13 +320,9 @@ function Dashboard({ onNavigate }) {
                 <StatCard
                     label="Profit"
                     value={stats.hasCost ? fmt(stats.profit) : '—'}
-                    sub={stats.hasCost
-                        ? (stats.margin != null ? `${stats.margin.toFixed(1)}% margin` : '')
-                        : 'Add cost prices to unlock'}
+                    sub={getProfitSub(stats.hasCost, stats.margin)}
                     icon={DollarSign}
-                    color={stats.hasCost && stats.profit < 0
-                        ? { bg: "bg-rose-50", icon: "text-rose-600", text: "text-rose-700" }
-                        : { bg: "bg-emerald-50", icon: "text-emerald-600", text: "text-emerald-700" }}
+                    color={getProfitColor(stats.hasCost, stats.profit)}
                     onClick={() => onNavigate('orders')}
                 />
                 <StatCard
@@ -332,7 +379,7 @@ function Dashboard({ onNavigate }) {
                                                     Order #{order.id?.toString().slice(-6) || '???'}
                                                 </p>
                                                 <p className="text-xs text-slate-400 truncate">
-                                                    {order.items?.length || 0} item{(order.items?.length || 0) !== 1 ? 's' : ''}
+                                                    {order.items?.length || 0} item{(order.items?.length || 0) === 1 ? '' : 's'}
                                                     {' • '}
                                                     {order.date ? new Date(order.date).toLocaleString([], {
                                                         month: 'short', day: 'numeric',
@@ -369,8 +416,8 @@ function Dashboard({ onNavigate }) {
                                 {outOfStockItems.length > 0 && (
                                     <p className="text-[10px] font-bold text-rose-500 uppercase tracking-wide px-2 pt-1">Out of Stock</p>
                                 )}
-                                {outOfStockItems.slice(0, 3).map((item, i) => (
-                                    <div key={i} className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-rose-50/40">
+                                {outOfStockItems.slice(0, 3).map((item) => (
+                                    <div key={item.name} className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-rose-50/40">
                                         <span className="text-sm text-slate-700 truncate flex-1 mr-2">{item.name}</span>
                                         <span className="text-xs font-bold text-rose-600 bg-rose-100 px-2 py-0.5 rounded-full border border-rose-200 flex-shrink-0">
                                             Out of stock
@@ -380,8 +427,8 @@ function Dashboard({ onNavigate }) {
                                 {lowStockItems.length > 0 && (
                                     <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wide px-2 pt-1">Low Stock</p>
                                 )}
-                                {lowStockItems.slice(0, 4).map((item, i) => (
-                                    <div key={i} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-amber-50/40 transition-colors">
+                                {lowStockItems.slice(0, 4).map((item) => (
+                                    <div key={item.name} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-amber-50/40 transition-colors">
                                         <span className="text-sm text-slate-700 truncate flex-1 mr-2">{item.name}</span>
                                         <span className="text-xs font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 flex-shrink-0">
                                             {item.stock} left
@@ -402,6 +449,10 @@ function Dashboard({ onNavigate }) {
     );
 }
 
+Dashboard.propTypes = {
+    onNavigate: PropTypes.func.isRequired,
+};
+
 // ── Admin stat card ──────────────────────────────────────────────────────────
 const AdminStatCard = ({ label, value, sub, icon: Icon, color }) => (
     <div className={cn("bg-white rounded-xl border border-slate-200 p-5 shadow-card")}>
@@ -415,6 +466,18 @@ const AdminStatCard = ({ label, value, sub, icon: Icon, color }) => (
         {sub && <p className="text-xs text-slate-400 mt-1">{sub}</p>}
     </div>
 );
+
+AdminStatCard.propTypes = {
+    label: PropTypes.string.isRequired,
+    value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    sub: PropTypes.string,
+    icon: PropTypes.elementType.isRequired,
+    color: PropTypes.shape({
+        bg: PropTypes.string.isRequired,
+        icon: PropTypes.string.isRequired,
+        text: PropTypes.string.isRequired,
+    }).isRequired,
+};
 
 // ── Admin Dashboard ───────────────────────────────────────────────────────────
 function AdminDashboard({ onNavigate }) {
@@ -439,23 +502,21 @@ function AdminDashboard({ onNavigate }) {
                 <AdminStatCard
                     label="Active Staff"
                     value={activeUsers.length}
-                    sub={`${users.length} total account${users.length !== 1 ? 's' : ''}`}
+                    sub={`${users.length} total account${users.length === 1 ? '' : 's'}`}
                     icon={Users}
                     color={{ bg: 'bg-indigo-50', icon: 'text-indigo-600', text: 'text-indigo-700' }}
                 />
                 <AdminStatCard
                     label="Revenue"
                     value={fmt(stats.revenue)}
-                    sub={`${stats.orders} order${stats.orders !== 1 ? 's' : ''}`}
+                    sub={`${stats.orders} order${stats.orders === 1 ? '' : 's'}`}
                     icon={TrendingUp}
                     color={{ bg: 'bg-emerald-50', icon: 'text-emerald-600', text: 'text-emerald-700' }}
                 />
                 <AdminStatCard
                     label="Profit"
                     value={stats.hasCost ? fmt(stats.profit) : '—'}
-                    sub={stats.hasCost
-                        ? (stats.margin != null ? `${stats.margin.toFixed(1)}% margin` : '')
-                        : 'Add cost prices to products'}
+                    sub={getAdminProfitSub(stats.hasCost, stats.margin)}
                     icon={DollarSign}
                     color={stats.hasCost && stats.profit < 0
                         ? { bg: 'bg-rose-50', icon: 'text-rose-600', text: 'text-rose-700' }
@@ -550,6 +611,10 @@ function AdminDashboard({ onNavigate }) {
     );
 }
 
+AdminDashboard.propTypes = {
+    onNavigate: PropTypes.func.isRequired,
+};
+
 // ── App Shell ────────────────────────────────────────────────────────────────
 function AppContent() {
     const [activePage, setActivePage] = useState('dashboard');
@@ -567,7 +632,7 @@ function AppContent() {
         // Staff pages
         switch (activePage) {
             case 'dashboard': return <Dashboard onNavigate={setActivePage} />;
-            case 'pos':       return <POS />;
+            case 'pos':       return <Pos />;
             case 'orders':    return <Orders />;
             case 'products':  return <Products />;
             case 'credit':    return <Credit />;
@@ -608,7 +673,7 @@ class ErrorBoundary extends React.Component {
                         <h2 className="text-lg font-bold text-slate-900">Something went wrong</h2>
                         <p className="text-sm text-slate-500">{this.state.error?.message || 'An unexpected error occurred.'}</p>
                         <button
-                            onClick={() => window.location.reload()}
+                            onClick={() => globalThis.location.reload()}
                             className="px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-xl hover:bg-indigo-700 transition-colors"
                         >
                             Reload App
@@ -620,6 +685,10 @@ class ErrorBoundary extends React.Component {
         return this.props.children;
     }
 }
+
+ErrorBoundary.propTypes = {
+    children: PropTypes.node.isRequired,
+};
 
 export default function App() {
     return (

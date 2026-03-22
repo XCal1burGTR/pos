@@ -19,7 +19,6 @@ const STAFF_NAV = [
 
 const ADMIN_NAV = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'settings',  label: 'Settings',  icon: Settings },
     { id: 'users',     label: 'Users',     icon: Users },
 ];
 

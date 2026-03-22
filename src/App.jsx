@@ -624,9 +624,8 @@ function AppContent() {
         // Admin can only access dashboard, settings, users
         if (isAdmin) {
             switch (activePage) {
-                case 'settings': return <Settings />;
-                case 'users':    return <UserManagement />;
-                default:         return <AdminDashboard onNavigate={setActivePage} />;
+                case 'users': return <UserManagement />;
+                default:      return <AdminDashboard onNavigate={setActivePage} />;
             }
         }
         // Staff pages

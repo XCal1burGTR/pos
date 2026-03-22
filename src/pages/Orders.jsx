@@ -6,7 +6,7 @@ import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { Modal, ModalBody, ModalFooter } from '../components/ui/Modal';
 import { EmptyState } from '../components/ui/EmptyState';
-import { Receipt, Calendar, Search, FileText, TrendingUp, XCircle, Banknote, CreditCard, Smartphone, Eye, Download, Printer } from 'lucide-react';
+import { Receipt, Calendar, Search, FileText, TrendingUp, XCircle, Banknote, CreditCard, Smartphone, Eye, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import PropTypes from 'prop-types';
 import { useToast } from '../context/ToastContext';
 import { ThermalReceipt } from './POS';
@@ -70,6 +70,8 @@ FilterBtn.propTypes = {
     children: PropTypes.node.isRequired,
 };
 
+const ORDERS_PER_PAGE = 10;
+
 const Orders = () => {
     const { orders, credits, cancelOrder, settings } = useShop();
     const { toast } = useToast();
@@ -83,22 +85,23 @@ const Orders = () => {
     const [pdfPortalData, setPdfPortalData] = useState(null);
     const [pdfAction, setPdfAction]        = useState(null);
     const [pdfGenerating, setPdfGenerating] = useState(false);
+    const [currentPage, setCurrentPage]    = useState(1);
+    const [jumpPage, setJumpPage]          = useState('');
+
+    // Reset to page 1 whenever filters/search change
+    useEffect(() => { setCurrentPage(1); }, [statusFilter, methodFilter, payFilter, searchTerm]);
 
     useEffect(() => {
         if (!pdfPortalData || !pdfAction) return;
         const timer = setTimeout(async () => {
             setPdfGenerating(true);
             try {
-                if (pdfAction === 'download') {
-                    const receiptEl = document.querySelector('.receipt-print-area');
-                    const html = receiptEl ? receiptEl.innerHTML : '';
-                    await ipcRenderer.invoke('download-pdf', {
-                        html,
-                        filename: `Invoice-${pdfPortalData.id}.pdf`,
-                    });
-                } else if (pdfAction === 'print') {
-                    await ipcRenderer.invoke('print-window');
-                }
+                const receiptEl = document.querySelector('.receipt-print-area');
+                const html = receiptEl ? receiptEl.innerHTML : '';
+                await ipcRenderer.invoke('download-pdf', {
+                    html,
+                    filename: `Invoice-${pdfPortalData.id}.pdf`,
+                });
             } finally {
                 setPdfPortalData(null);
                 setPdfAction(null);
@@ -114,11 +117,6 @@ const Orders = () => {
         setPdfAction('download');
     };
 
-    const handlePrintBill = () => {
-        if (!viewOrder || pdfGenerating) return;
-        setPdfPortalData(buildPrintData(viewOrder));
-        setPdfAction('print');
-    };
 
     const buildPrintData = (order) => {
         const dt = new Date(order.date);
@@ -173,6 +171,23 @@ const Orders = () => {
     const filteredOrders   = getFilteredOrders();
     const completedOrders  = filteredOrders.filter(o => o.status !== 'cancelled');
     const totalRevenue     = completedOrders.reduce((sum, o) => sum + (o.finalTotal || 0), 0);
+
+    const totalPages     = Math.max(1, Math.ceil(filteredOrders.length / ORDERS_PER_PAGE));
+    const safePage       = Math.min(currentPage, totalPages);
+    const paginatedOrders = filteredOrders.slice((safePage - 1) * ORDERS_PER_PAGE, safePage * ORDERS_PER_PAGE);
+
+    const goToPage = (p) => {
+        const clamped = Math.max(1, Math.min(p, totalPages));
+        setCurrentPage(clamped);
+        setJumpPage('');
+    };
+
+    // Build visible page numbers: first, last, and up to 3 around current
+    const pageNumbers = () => {
+        const pages = new Set([1, totalPages]);
+        for (let i = Math.max(1, safePage - 1); i <= Math.min(totalPages, safePage + 1); i++) pages.add(i);
+        return [...pages].sort((a, b) => a - b);
+    };
 
     const handleCancelOrder = () => {
         if (!cancelConfirm) return;
@@ -301,7 +316,7 @@ const Orders = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50">
-                                {filteredOrders.map((order) => {
+                                {paginatedOrders.map((order) => {
                                     const isCancelled  = order.status === 'cancelled';
                                     const payStatus    = getPaymentStatus(order, safeCredits);
                                     const creditRecord = safeCredits.find(c => c.orderId === order.id);
@@ -411,6 +426,80 @@ const Orders = () => {
                         </table>
                     </div>
                 )}
+
+                {/* Pagination */}
+                {filteredOrders.length > 0 && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-slate-100 bg-slate-50/50">
+                        {/* Count info */}
+                        <p className="text-xs text-slate-500 flex-shrink-0">
+                            Showing {(safePage - 1) * ORDERS_PER_PAGE + 1}–{Math.min(safePage * ORDERS_PER_PAGE, filteredOrders.length)} of {filteredOrders.length} orders
+                        </p>
+
+                        {/* Page controls */}
+                        <div className="flex items-center gap-1.5">
+                            {/* Prev */}
+                            <button
+                                onClick={() => goToPage(safePage - 1)}
+                                disabled={safePage === 1}
+                                className="h-8 w-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                            </button>
+
+                            {/* Page numbers with ellipsis */}
+                            {pageNumbers().map((pg, idx, arr) => {
+                                const showEllipsisBefore = idx > 0 && pg - arr[idx - 1] > 1;
+                                return (
+                                    <span key={pg} className="flex items-center gap-1.5">
+                                        {showEllipsisBefore && (
+                                            <span className="text-xs text-slate-400 px-1">…</span>
+                                        )}
+                                        <button
+                                            onClick={() => goToPage(pg)}
+                                            className={`h-8 min-w-[2rem] px-2 rounded-lg text-xs font-semibold border transition-colors ${
+                                                pg === safePage
+                                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                                            }`}
+                                        >
+                                            {pg}
+                                        </button>
+                                    </span>
+                                );
+                            })}
+
+                            {/* Next */}
+                            <button
+                                onClick={() => goToPage(safePage + 1)}
+                                disabled={safePage === totalPages}
+                                className="h-8 w-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                            </button>
+                        </div>
+
+                        {/* Jump to page */}
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="text-xs text-slate-500">Go to</span>
+                            <input
+                                type="number"
+                                min="1"
+                                max={totalPages}
+                                value={jumpPage}
+                                onChange={e => setJumpPage(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') goToPage(Number(jumpPage)); }}
+                                placeholder={safePage}
+                                className="w-14 h-8 text-xs text-center border border-slate-200 rounded-lg bg-white focus:outline-none focus:border-indigo-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
+                            <button
+                                onClick={() => goToPage(Number(jumpPage))}
+                                className="h-8 px-3 text-xs font-semibold bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors"
+                            >
+                                Go
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* View Bill Modal */}
@@ -425,10 +514,6 @@ const Orders = () => {
                             <Button variant="outline" onClick={handleDownloadPdf} disabled={pdfGenerating} className="gap-2">
                                 <Download className="h-4 w-4" />
                                 {pdfGenerating && pdfAction === 'download' ? 'Generating…' : 'Download PDF'}
-                            </Button>
-                            <Button onClick={handlePrintBill} disabled={pdfGenerating} className="gap-2">
-                                <Printer className="h-4 w-4" />
-                                {pdfGenerating && pdfAction === 'print' ? 'Printing…' : 'Print'}
                             </Button>
                         </ModalFooter>
                     </>

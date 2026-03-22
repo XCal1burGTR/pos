@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -53,8 +53,29 @@ ipcMain.on('save-data', (event, key, value) => {
     store.set(key, value);
 });
 
-ipcMain.handle('print-window', async () => {
-    await mainWindow.webContents.print({ silent: false, printBackground: true });
+ipcMain.handle('print-receipt', async (event, html) => {
+    const tmpHtmlPath = path.join(os.tmpdir(), 'pos_receipt_print.html');
+    const tmpPdfPath = path.join(os.tmpdir(), 'pos_receipt_print.pdf');
+
+    const fullHtml = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 12mm 15mm; background: white; color: #111; }
+  @page { size: A4; margin: 10mm; }
+</style></head><body>${html}</body></html>`;
+
+    fs.writeFileSync(tmpHtmlPath, fullHtml, 'utf8');
+
+    const pdfWin = new BrowserWindow({ show: false, webPreferences: { nodeIntegration: false, contextIsolation: true } });
+    await pdfWin.loadFile(tmpHtmlPath);
+    const pdfData = await pdfWin.webContents.printToPDF({ printBackground: true, pageSize: 'A4' });
+    pdfWin.destroy();
+
+    try { fs.unlinkSync(tmpHtmlPath); } catch { /* ignore */ }
+
+    fs.writeFileSync(tmpPdfPath, pdfData);
+    await shell.openPath(tmpPdfPath);
+    return true;
 });
 
 ipcMain.handle('download-pdf', async (event, { html, filename }) => {

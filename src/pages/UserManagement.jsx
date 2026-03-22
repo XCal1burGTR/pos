@@ -489,14 +489,14 @@ const UserManagement = () => {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 flex items-center gap-1">
+                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 flex items-center gap-1">
                                 <CalendarDays className="h-3 w-3" /> Expiry Date
                             </label>
                             <Input type="date" value={editForm.expiryDate || ''}
                                 onChange={e => setEditForm({ ...editForm, expiryDate: e.target.value })} />
                         </div>
                         <div>
-                            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 flex items-center gap-1">
+                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5 flex items-center gap-1">
                                 <UserX className="h-3 w-3" /> Deactivation
                             </label>
                             <Input type="date" value={editForm.deactivationDate || ''}

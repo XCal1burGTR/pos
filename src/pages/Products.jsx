@@ -533,7 +533,7 @@ const EditProductModal = ({
     if (!editingProduct) return null;
 
     return (
-        <Modal isOpen={!!editingProduct} onClose={() => setEditingProduct(null)} title="Edit Product" size="xl">
+        <Modal isOpen={!!editingProduct} onClose={() => setEditingProduct(null)} title="Edit Product" size="2xl">
             <ModalBody className="space-y-5 max-h-[75vh] overflow-y-auto custom-scrollbar">
                 <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5 col-span-2">

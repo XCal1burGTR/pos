@@ -218,7 +218,10 @@ const POS = () => {
         if (!printData) return;
         const timer = setTimeout(async () => {
             try {
-                await ipcRenderer.invoke('print-window');
+                const area = document.querySelector('.receipt-print-area');
+                if (area) {
+                    await ipcRenderer.invoke('print-receipt', area.innerHTML);
+                }
             } finally {
                 setPrintData(null);
             }

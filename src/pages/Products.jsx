@@ -7,7 +7,7 @@ import { Badge } from '../components/ui/Badge';
 import { Modal, ModalBody, ModalFooter } from '../components/ui/Modal';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ColorPicker } from '../components/ui/ColorPicker';
-import { Plus, Trash2, Edit, X, Package, CheckCircle2, Sparkles, Save, History, Search, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, Edit, X, Package, CheckCircle2, Sparkles, Save, History, Search, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import PropTypes from 'prop-types';
 import { useToast } from '../context/ToastContext';
 
@@ -131,8 +131,8 @@ CatalogTab.propTypes = {
     setDeleteConfirm: PropTypes.func.isRequired,
 };
 
-const PurchaseLogTab = ({ filteredLogs, logSearch, setLogSearch, formatDate }) => {
-    if (filteredLogs.length === 0) {
+const PurchaseLogTab = ({ filteredLogs, allFilteredCount, allFilteredTotal, logSearch, setLogSearch, formatDate }) => {
+    if (allFilteredCount === 0) {
         return (
             <EmptyState
                 icon={History}
@@ -169,10 +169,10 @@ const PurchaseLogTab = ({ filteredLogs, logSearch, setLogSearch, formatDate }) =
             <tfoot className="bg-slate-50/80 border-t border-slate-200 sticky bottom-0">
                 <tr>
                     <td colSpan="4" className="px-5 py-2.5 text-xs font-semibold text-slate-500 text-right uppercase tracking-wide">
-                        Total spent ({filteredLogs.length} entries)
+                        Total spent ({allFilteredCount} entries)
                     </td>
                     <td className="px-5 py-2.5 text-right font-bold text-slate-900">
-                        ₹{filteredLogs.reduce((s, l) => s + (l.totalCost || 0), 0).toFixed(2)}
+                        ₹{allFilteredTotal.toFixed(2)}
                     </td>
                 </tr>
             </tfoot>
@@ -182,10 +182,14 @@ const PurchaseLogTab = ({ filteredLogs, logSearch, setLogSearch, formatDate }) =
 
 PurchaseLogTab.propTypes = {
     filteredLogs: PropTypes.array.isRequired,
+    allFilteredCount: PropTypes.number.isRequired,
+    allFilteredTotal: PropTypes.number.isRequired,
     logSearch: PropTypes.string.isRequired,
     setLogSearch: PropTypes.func.isRequired,
     formatDate: PropTypes.func.isRequired,
 };
+
+const PRODUCTS_PER_PAGE = 10;
 
 const RightPanel = ({
     activeTab,
@@ -199,6 +203,33 @@ const RightPanel = ({
     openEdit,
     setDeleteConfirm
 }) => {
+    const [currentPage, setCurrentPage] = useState(1);
+    const [jumpPage, setJumpPage] = useState('');
+
+    useEffect(() => { setCurrentPage(1); }, [activeTab]);
+    useEffect(() => { setCurrentPage(1); }, [logSearch]);
+
+    const activeTotal = activeTab === 'products' ? inventory.length : filteredLogs.length;
+    const totalPages = Math.max(1, Math.ceil(activeTotal / PRODUCTS_PER_PAGE));
+    const safePage = Math.min(currentPage, totalPages);
+
+    const paginatedInventory = inventory.slice((safePage - 1) * PRODUCTS_PER_PAGE, safePage * PRODUCTS_PER_PAGE);
+    const paginatedLogs = filteredLogs.slice((safePage - 1) * PRODUCTS_PER_PAGE, safePage * PRODUCTS_PER_PAGE);
+    const allFilteredCount = filteredLogs.length;
+    const allFilteredTotal = filteredLogs.reduce((s, l) => s + (l.totalCost || 0), 0);
+
+    const goToPage = (p) => {
+        const clamped = Math.max(1, Math.min(p, totalPages));
+        setCurrentPage(clamped);
+        setJumpPage('');
+    };
+
+    const pageNumbers = () => {
+        const pages = new Set([1, totalPages]);
+        for (let i = Math.max(1, safePage - 1); i <= Math.min(totalPages, safePage + 1); i++) pages.add(i);
+        return [...pages].sort((a, b) => a - b);
+    };
+
     return (
         <Card className="lg:col-span-2 flex flex-col overflow-hidden h-fit" style={{ maxHeight: 'calc(100vh - 13rem)' }}>
             <CardHeader className="border-b border-slate-100 flex-row items-center justify-between py-3 flex-shrink-0 gap-3">
@@ -246,20 +277,65 @@ const RightPanel = ({
             <div className="flex-1 overflow-auto custom-scrollbar">
                 {activeTab === 'products' && (
                     <CatalogTab
-                        inventory={inventory}
+                        inventory={paginatedInventory}
                         openEdit={openEdit}
                         setDeleteConfirm={setDeleteConfirm}
                     />
                 )}
                 {activeTab === 'logs' && (
                     <PurchaseLogTab
-                        filteredLogs={filteredLogs}
+                        filteredLogs={paginatedLogs}
+                        allFilteredCount={allFilteredCount}
+                        allFilteredTotal={allFilteredTotal}
                         logSearch={logSearch}
                         setLogSearch={setLogSearch}
                         formatDate={formatDate}
                     />
                 )}
             </div>
+
+            {activeTotal > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-slate-100 bg-slate-50/50 flex-shrink-0">
+                    <p className="text-xs text-slate-500 flex-shrink-0">
+                        Showing {(safePage - 1) * PRODUCTS_PER_PAGE + 1}–{Math.min(safePage * PRODUCTS_PER_PAGE, activeTotal)} of {activeTotal}
+                    </p>
+                    <div className="flex items-center gap-1.5">
+                        <button onClick={() => goToPage(safePage - 1)} disabled={safePage === 1}
+                            className="h-8 w-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                            <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        {pageNumbers().map((pg, idx, arr) => {
+                            const showEllipsis = idx > 0 && pg - arr[idx - 1] > 1;
+                            return (
+                                <span key={pg} className="flex items-center gap-1.5">
+                                    {showEllipsis && <span className="text-xs text-slate-400 px-1">…</span>}
+                                    <button onClick={() => goToPage(pg)}
+                                        className={`h-8 min-w-[2rem] px-2 rounded-lg text-xs font-semibold border transition-colors ${pg === safePage ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}>
+                                        {pg}
+                                    </button>
+                                </span>
+                            );
+                        })}
+                        <button onClick={() => goToPage(safePage + 1)} disabled={safePage === totalPages}
+                            className="h-8 w-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                            <ChevronRight className="h-4 w-4" />
+                        </button>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-xs text-slate-500">Go to</span>
+                        <input type="number" min="1" max={totalPages} value={jumpPage}
+                            onChange={e => setJumpPage(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') goToPage(Number(jumpPage)); }}
+                            placeholder={String(safePage)}
+                            className="w-14 h-8 text-xs text-center border border-slate-200 rounded-lg bg-white focus:outline-none focus:border-indigo-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                        <button onClick={() => goToPage(Number(jumpPage))}
+                            className="h-8 px-3 text-xs font-semibold bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors">
+                            Go
+                        </button>
+                    </div>
+                </div>
+            )}
         </Card>
     );
 };

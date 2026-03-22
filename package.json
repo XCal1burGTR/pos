@@ -53,7 +53,8 @@
       "electron/**/*"
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "src/assets/icon.ico"
     }
   }
 }

@@ -6,7 +6,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Badge } from '../components/ui/Badge';
-import { Wallet, Phone, MapPin, Clock, CheckCircle2, Search } from 'lucide-react';
+import { Wallet, Phone, MapPin, Clock, CheckCircle2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const PaymentHistory = ({ payments, fmt }) => {
     if (!payments?.length) return null;
@@ -160,6 +160,8 @@ const CreditDetail = ({ selected, fmt, payAmount, setPayAmount, payNote, setPayN
 };
 CreditDetail.propTypes = { selected: PropTypes.object, fmt: PropTypes.func.isRequired, payAmount: PropTypes.string.isRequired, setPayAmount: PropTypes.func.isRequired, payNote: PropTypes.string.isRequired, setPayNote: PropTypes.func.isRequired, isRecording: PropTypes.bool.isRequired, handleRecordPayment: PropTypes.func.isRequired };
 
+const CREDITS_PER_PAGE = 10;
+
 const Credit = () => {
     const { credits, recordCreditPayment } = useShop();
     const [search, setSearch] = useState('');
@@ -168,6 +170,8 @@ const Credit = () => {
     const [payAmount, setPayAmount] = useState('');
     const [payNote, setPayNote] = useState('');
     const [isRecording, setIsRecording] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [jumpPage, setJumpPage] = useState('');
 
     const allCredits = credits || [];
     const filtered = allCredits
@@ -179,6 +183,8 @@ const Credit = () => {
     const pendingCount = allCredits.filter(c => c.status === 'pending').length;
     const settledCount = allCredits.filter(c => c.status === 'settled').length;
     const totalCollected = allCredits.reduce((s, c) => s + (c.paidAmount || 0), 0);
+
+    useEffect(() => { setCurrentPage(1); }, [filter, search]);
 
     useEffect(() => {
         if (selected) {
@@ -199,6 +205,22 @@ const Credit = () => {
 
     const fmt = (n) => `₹${Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+    const totalPages = Math.max(1, Math.ceil(filtered.length / CREDITS_PER_PAGE));
+    const safePage = Math.min(currentPage, totalPages);
+    const paginatedCredits = filtered.slice((safePage - 1) * CREDITS_PER_PAGE, safePage * CREDITS_PER_PAGE);
+
+    const goToPage = (p) => {
+        const clamped = Math.max(1, Math.min(p, totalPages));
+        setCurrentPage(clamped);
+        setJumpPage('');
+    };
+
+    const pageNumbers = () => {
+        const pages = new Set([1, totalPages]);
+        for (let i = Math.max(1, safePage - 1); i <= Math.min(totalPages, safePage + 1); i++) pages.add(i);
+        return [...pages].sort((a, b) => a - b);
+    };
+
     return (
         <div className="flex flex-col h-[calc(100vh-8rem)] gap-3 overflow-hidden">
             <CreditStats totalPending={totalPending} pendingCount={pendingCount} settledCount={settledCount} totalCollected={totalCollected} fmt={fmt} />
@@ -217,8 +239,52 @@ const Credit = () => {
                         ))}
                     </div>
                     <div className="flex-1 overflow-y-auto space-y-1 pr-0.5 min-h-0">
-                        <CreditList filtered={filtered} filter={filter} selected={selected} setSelected={setSelected} setPayAmount={setPayAmount} setPayNote={setPayNote} fmt={fmt} />
+                        <CreditList filtered={paginatedCredits} filter={filter} selected={selected} setSelected={setSelected} setPayAmount={setPayAmount} setPayNote={setPayNote} fmt={fmt} />
                     </div>
+                    {filtered.length > 0 && (
+                        <div className="flex-shrink-0 border-t border-slate-100 pt-2 space-y-1.5">
+                            <div className="flex items-center justify-between">
+                                <p className="text-[10px] text-slate-400">
+                                    {(safePage - 1) * CREDITS_PER_PAGE + 1}–{Math.min(safePage * CREDITS_PER_PAGE, filtered.length)} of {filtered.length}
+                                </p>
+                                <div className="flex items-center gap-1">
+                                    <button onClick={() => goToPage(safePage - 1)} disabled={safePage === 1}
+                                        className="h-7 w-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                                        <ChevronLeft className="h-3.5 w-3.5" />
+                                    </button>
+                                    {pageNumbers().map((pg, idx, arr) => {
+                                        const showEllipsis = idx > 0 && pg - arr[idx - 1] > 1;
+                                        return (
+                                            <span key={pg} className="flex items-center gap-1">
+                                                {showEllipsis && <span className="text-[10px] text-slate-400 px-0.5">…</span>}
+                                                <button onClick={() => goToPage(pg)}
+                                                    className={`h-7 min-w-[1.75rem] px-1.5 rounded-lg text-xs font-semibold border transition-colors ${pg === safePage ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'}`}>
+                                                    {pg}
+                                                </button>
+                                            </span>
+                                        );
+                                    })}
+                                    <button onClick={() => goToPage(safePage + 1)} disabled={safePage === totalPages}
+                                        className="h-7 w-7 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                                        <ChevronRight className="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] text-slate-400">Go to</span>
+                                <input type="number" min="1" max={totalPages} value={jumpPage}
+                                    onChange={e => setJumpPage(e.target.value)}
+                                    onKeyDown={e => { if (e.key === 'Enter') goToPage(Number(jumpPage)); }}
+                                    placeholder={String(safePage)}
+                                    className="w-12 h-7 text-xs text-center border border-slate-200 rounded-lg bg-white focus:outline-none focus:border-indigo-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                />
+                                <button onClick={() => goToPage(Number(jumpPage))}
+                                    className="h-7 px-2.5 text-xs font-semibold bg-white border border-slate-200 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors">
+                                    Go
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
                 <div className="w-px bg-slate-200 flex-shrink-0" />
                 <div className="flex-1 min-w-0 overflow-y-auto pl-2">

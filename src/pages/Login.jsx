@@ -1,13 +1,12 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useShop } from '../context/ShopContext';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
-import { Eye, EyeOff, LogIn, ShoppingBag } from 'lucide-react';
+import { Eye, EyeOff, LogIn } from 'lucide-react';
+import XyberixLogo from '../assets/xyberixcorelogo.png';
 
 const Login = () => {
     const { login } = useAuth();
-    const { settings } = useShop();
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [showPass, setShowPass] = useState(false);
@@ -30,20 +29,12 @@ const Login = () => {
 
                 {/* Brand */}
                 <div className="text-center mb-8">
-                    {settings.logo ? (
-                        <img
-                            src={settings.logo}
-                            alt="Logo"
-                            className="h-16 w-16 rounded-2xl mx-auto mb-4 object-cover ring-2 ring-indigo-500/30"
-                        />
-                    ) : (
-                        <div className="h-16 w-16 rounded-2xl bg-indigo-600 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-900/50">
-                            <ShoppingBag className="h-8 w-8 text-white" />
-                        </div>
-                    )}
-                    <h1 className="text-2xl font-bold text-white">
-                        {settings.storeName || 'POS System'}
-                    </h1>
+                    <img
+                        src={XyberixLogo}
+                        alt="Xyberix Core"
+                        className="h-28 w-28 mx-auto mb-2 object-cover rounded-2xl"
+                    />
+                    <h1 className="text-2xl font-bold text-white">Xyberix Core</h1>
                     <p className="text-slate-400 text-sm mt-1">Sign in to continue</p>
                 </div>
 
@@ -121,7 +112,7 @@ const Login = () => {
                 </div>
 
                 <p className="text-center text-xs text-slate-600 mt-6">
-                    {settings.storeName || 'POS System'} &mdash; Internal use only
+                    Xyberix Core &mdash; Internal use only
                 </p>
             </div>
         </div>

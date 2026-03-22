@@ -229,9 +229,19 @@ const POS = () => {
         return () => clearTimeout(timer);
     }, [printData]);
 
-    const filteredProducts = inventory.filter(p =>
-        p.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredProducts = inventory.filter(p => {
+        const term = searchTerm.toLowerCase();
+        if (!term) return true;
+        if (p.name.toLowerCase().includes(term)) return true;
+        if (p.hsnCode?.toLowerCase().includes(term)) return true;
+        if (p.variants) {
+            return Object.entries(p.variants).some(([vName, vData]) =>
+                vName.toLowerCase().includes(term) ||
+                vData.code?.toLowerCase().includes(term)
+            );
+        }
+        return false;
+    });
 
     const handleProductClick = (product) => {
         const hasVariants = !product.isVariablePrice && product.variants && Object.keys(product.variants).length > 0;
